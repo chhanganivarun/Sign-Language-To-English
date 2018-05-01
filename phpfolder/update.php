@@ -36,7 +36,7 @@
                     parse_str(file("left.in")[0]);
                     parse_str(file("right.in")[0]);
 
-                /**
+                /**/
                     {
                         if($l1==1 && $l2==0 && $l3==0 && $l4==0 && $l5==0 && $lx >= 70 && $lx <= 110 )
                         {
