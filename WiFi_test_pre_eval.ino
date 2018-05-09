@@ -1,5 +1,7 @@
 #include "SoftwareSerial.h"
 #include<Wire.h>
+#include <SoftwareWire.h>
+
 const int MPU_addr=0x68;
 int16_t axis_X,axis_Y,axis_Z;
 int minVal=265;
@@ -9,27 +11,32 @@ int maxVal=402;
 //String apiKey="6ZW1NZ1A9WSN4RFT";
 
 String ssid ="narain_mukul";
-String password="mu11u12@s55m1@1889";
+String password="password";
 SoftwareSerial esp(7, 8);// RX, TX
 String data;
-String server = "192.168.43.188"; // www.example.com
+String server = "192.168.43.188"; // www.example.com 192.168.43.188
 String uri = "update.php";// our example is /esppost.php
 
+uint8_t sdaPin = 4;
+uint8_t sclPin = 5;
+
+SoftwareWire i2c(sdaPin,sclPin);
 
 
 String finger1,finger2,finger3,finger4,finger5;
 float fint1,fint2,fint3,fint4,fint5;
-float x_degree,y_degree,z_degree,handbool;
-float compflex=300;
+float x_degree,y_degree,z_degree;
+bool handbool;
+float compflex=200;
 
 void setup() 
 {
 
-  Wire.begin();
-  Wire.beginTransmission(MPU_addr);
-  Wire.write(0x6B);
-  Wire.write(0);
-  Wire.endTransmission(true);
+  i2c.begin();
+  i2c.beginTransmission(MPU_addr);
+  i2c.write(0x6B);
+  i2c.write(byte(0));
+  i2c.endTransmission(true);
   
   esp.begin(115200);
   
@@ -40,9 +47,13 @@ void setup()
   //reset();
   //delay(3000);
   connectWifi();
-
   pinMode(13,INPUT);
-  pinMode(3,INPUT);
+  pinMode(11,OUTPUT);
+  pinMode(12,OUTPUT);
+  pinMode(10,OUTPUT);
+  digitalWrite(11,HIGH);//LOW for right HIGH for left hand
+  digitalWrite(12,HIGH);
+  digitalWrite(10,HIGH);
 }
 
 void loop () 
@@ -53,15 +64,15 @@ void loop ()
   fint2 = analogRead(A1);
   fint3 = analogRead(A2);
   fint4 = analogRead(A3);
-  fint5 = analogRead(3);
+  fint5 = analogRead(A4);
   //Gyroscope Read here
-  Wire.beginTransmission(MPU_addr);
-  Wire.write(0x3B);
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU_addr,14,true);
-  axis_X=Wire.read()<<8|Wire.read();
-  axis_Y=Wire.read()<<8|Wire.read();
-  axis_Z=Wire.read()<<8|Wire.read();
+  i2c.beginTransmission(MPU_addr);
+  i2c.write(0x3B);
+  i2c.endTransmission(false);
+  i2c.requestFrom(MPU_addr,14,true);
+  axis_X=i2c.read()<<8|i2c.read();
+  axis_Y=i2c.read()<<8|i2c.read();
+  axis_Z=i2c.read()<<8|i2c.read();
   int xAng = map(axis_X,minVal,maxVal,-90,90);
   int yAng = map(axis_Y,minVal,maxVal,-90,90);
   int zAng = map(axis_Z,minVal,maxVal,-90,90);
@@ -69,6 +80,7 @@ void loop ()
   y_degree= RAD_TO_DEG * (atan2(-xAng, -zAng)+PI);
   z_degree= RAD_TO_DEG * (atan2(-yAng, -xAng)+PI);
 
+  //Serial.println(processString());
 
   httppost();
   
@@ -90,7 +102,7 @@ void check()
   delay(500);
   
   if(esp.find("OK") ) Serial.println("Ok");
-  else Serial.println("Not Ok");
+  else Serial.println("Not Ok");    
 }
 
 //reset the esp8266 module
@@ -159,6 +171,46 @@ void connectWifi()
 
 }
 
+String processString()
+{
+  finger1=((fint1<compflex)?"1":"0");
+  finger2=((fint2<compflex)?"1":"0");
+  finger3=((fint3<compflex)?"1":"0");
+  finger4=((fint4<compflex)?"1":"0");
+  finger5=((fint5<compflex)?"1":"0");
+  //finger2=finger3=finger4=finger5="0";
+  String postRequest ="GET /update.php?hand=";
+  postRequest+=handbool;
+//  postRequest+="&fint1=";
+//  postRequest+=fint1;
+  postRequest+="&finger1=";
+  postRequest+=finger1;
+//  postRequest+="&fint2=";
+//  postRequest+=fint2;
+  postRequest+="&finger2=";
+  postRequest+=finger2;
+//  postRequest+="&fint3=";
+//  postRequest+=fint3;
+  postRequest+="&finger3=";
+  postRequest+=finger3;
+//  postRequest+="&fint4=";
+//  postRequest+=fint4;
+  postRequest+="&finger4=";
+  postRequest+=finger4;
+//  postRequest+="&fint5=";
+//  postRequest+=fint5;
+  postRequest+="&finger5=";
+  postRequest+=finger5;
+  
+  postRequest+="&x_degree=";
+  postRequest+=y_degree;
+  postRequest+="&y_degree=";
+  postRequest+=x_degree;
+  postRequest+="&z_degree=";
+  postRequest+=z_degree;
+  postRequest+="\r\n";
+  return postRequest;
+}
 
 void httppost () {
 
@@ -172,22 +224,8 @@ void httppost () {
   }
   delay(1000);
   char buf[32];
-  String hand=hand?"1":"0";
-  finger1=((fint4>compflex)?"1":"0");
-  finger2=((fint4>compflex)?"1":"0");
-  finger3=((fint4>compflex)?"1":"0");
-  finger4=((fint4>compflex)?"1":"0");
-  finger5=((fint4>compflex)?"1":"0");
-  finger2=finger3=finger4=finger5="0";
-  String postRequest ="GET /update.php?hand="+hand+"&finger1="+finger1+"&finger2="+finger2+"&finger3="+finger3+"&finger4="+finger4+"&finger5="+finger5;
-  postRequest+="&x_degree=";
-  postRequest+=y_degree;
-  postRequest+="y_degree=";
-  postRequest+=x_degree;
-  postRequest+="&z_degree=";
-  postRequest+=z_degree;
-  postRequest+="\r\n";
-  
+  //String hand=hand?"1":"0";
+  String postRequest=processString();
   String sendCmd = "AT+CIPSEND=";//determine the number of characters to be sent.
   
   esp.print(sendCmd);
